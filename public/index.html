@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Odin</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: rgb(2, 6, 8); 
+        }
+#canvas {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background: url('path/to/your/background/image.jpg') no-repeat center center;
+    background-size: cover; /* Или укажите размеры по вашему выбору */
+}
+        #canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const socket = new WebSocket('ws://localhost:3000');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let bubbles = [];
+        let maxScore = 0;
+
+        // Загрузка фонового изображения
+        const backgroundImage = new Image();
+        backgroundImage.src = '1.png'; // Замените на путь к вашему изображению
+
+        // Отображение пузырьков
+        function animateBubbles() {
+            // Отрисовка фонового изображения
+            const aspectRatio = backgroundImage.width / backgroundImage.height;
+            const canvasAspectRatio = canvas.width / canvas.height;
+            
+            let imgWidth, imgHeight;
+            
+            // Установка размеров изображения для пропорционального отображения
+            if (canvasAspectRatio > aspectRatio) {
+                imgWidth = canvas.width;
+                imgHeight = canvas.width / aspectRatio;
+            } else {
+                imgHeight = canvas.height;
+                imgWidth = canvas.height * aspectRatio;
+            }
+            
+            const offsetX = (canvas.width - imgWidth) / 2;
+            const offsetY = (canvas.height - imgHeight) / 2;
+            
+            // Изменение ширины фона
+            const backgroundScale = 0.4; // Измените значение для масштабирования ширины
+            ctx.drawImage(backgroundImage, offsetX+550, offsetY+850, imgWidth * backgroundScale, imgHeight * backgroundScale);
+
+            // Позиции для лидера и спирали
+            const leaderX = (canvas.width / 2) -20; // Координаты для пузырька-лидера
+            const leaderY = 300; // Выровнять лидера в верхней части экрана
+
+            const leaderY2 = 350; // Выровнять лидера в верхней части экрана
+
+            // Максимальный радиус спирали
+            const maxSpiralRadius = Math.min(canvas.width, canvas.height) / 3;
+
+            bubbles.sort((a, b) => b.totalScore - a.totalScore);
+
+            // Отображаем пузырек-лидера
+            if (bubbles.length > 0) {
+                const leader = bubbles[0];
+                leader.size = Math.sqrt(leader.totalScore / maxScore) * 50;
+
+                ctx.beginPath();
+                ctx.arc(leaderX, leaderY, leader.size, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(0, 150, 136, 0.8)';
+                ctx.fill();
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(leaderX, leaderY, leader.size, 0, 2 * Math.PI);
+                ctx.clip();
+                ctx.drawImage(leader.image, leaderX - leader.size, leaderY - leader.size, leader.size * 2, leader.size * 2);
+                ctx.restore();
+
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                ctx.fillText(leader.totalScore.toFixed(2), leaderX, leaderY + 5);
+            }
+
+            // Отображаем остальные пузырьки по спирали
+            bubbles.slice(1).forEach((bubble, index) => {
+                const angle = index * 0.1; // Угол для спирали (регулируйте значение для изменения плотности спирали)
+                const radius = Math.min(maxSpiralRadius, 50 + (index * 5)); // Радиус спирали, ограничиваем его максимальным значением
+                const x = leaderX + radius * Math.cos(angle); // Координаты X для пузырька
+                const y = leaderY2 + radius * Math.sin(angle); // Координаты Y для пузырька
+
+                bubble.size = Math.sqrt(bubble.totalScore / maxScore) * 50;
+
+                // Отрисовка пузырька
+                ctx.beginPath();
+                ctx.arc(x, y, bubble.size, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(0, 150, 136, 0.5)';
+                ctx.fill();
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(x, y, bubble.size, 0, 2 * Math.PI);
+                ctx.clip();
+                ctx.drawImage(bubble.image, x - bubble.size, y - bubble.size, bubble.size * 2, bubble.size * 2);
+                ctx.restore();
+
+                ctx.font = '8px Arial';
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                //ctx.fillText(bubble.totalScore.toFixed(2), x, y + 5);
+            });
+
+            requestAnimationFrame(animateBubbles);
+        }
+
+        socket.onopen = () => {
+            console.log('WebSocket соединение установлено');
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket ошибка:', error);
+        };
+
+        socket.onmessage = function(event) {
+            console.log('Полученные данные:', event.data);
+            const data = JSON.parse(event.data);
+
+            let bubble = bubbles.find(bubble => bubble.userId === data.userId);
+            if (!bubble) {
+                bubble = {
+                    userId: data.userId,
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    size: Math.sqrt(data.activity.totalValue) * 10,
+                    totalScore: data.activity.totalValue,
+                    image: new Image()
+                };
+                bubble.image.src = data.avatar;
+                bubble.image.onload = () => {
+                    console.log('Изображение загружено:', bubble.image.src);
+                };
+                bubbles.push(bubble);
+            } else {
+                bubble.size = Math.sqrt(data.activity.totalValue) * 10;
+                bubble.totalScore = data.activity.totalValue;
+            }
+
+            maxScore = Math.max(maxScore, data.activity.totalValue);
+        };
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        backgroundImage.onload = () => {
+            animateBubbles();
+        };
+    </script>
+</body>
+</html>

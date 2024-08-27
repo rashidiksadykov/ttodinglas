@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Live Feed</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const socket = new WebSocket('ws://localhost:3000');
+
+        // Устанавливаем размеры канваса
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Список пузырьков
+        let bubbles = [];
+
+        // Функция для отрисовки круглых аватарок
+        function drawBubbles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            bubbles.forEach(bubble => {
+                // Draw bubble background
+                ctx.beginPath();
+                ctx.arc(bubble.x, bubble.y, bubble.size, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(0, 150, 136, 0.5)'; // Цвет пузырька
+                ctx.fill();
+
+                // Draw avatar
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(bubble.x, bubble.y, bubble.size, 0, 2 * Math.PI);
+                ctx.clip(); // Маска для круга
+                ctx.drawImage(bubble.image, bubble.x - bubble.size, bubble.y - bubble.size, bubble.size * 2, bubble.size * 2);
+                ctx.restore();
+            });
+        }
+
+        // Обработка сообщений от WebSocket
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            // Добавляем новый пузырёк
+            let bubble = bubbles.find(bubble => bubble.userId === data.userId);
+            if (!bubble) {
+                bubble = {
+                    userId: data.userId,
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.sqrt(data.activity.totalValue) * 100, // Размер пузырька пропорционален значению
+                    image: new Image() // Создаем изображение для аватара
+                };
+                bubble.image.src = data.avatar;
+                bubbles.push(bubble);
+            } else {
+                // Обновляем размер существующего пузырька
+                bubble.size = Math.sqrt(data.activity.totalValue) * 100;
+            }
+
+            drawBubbles();
+        };
+
+        // Обработка изменения размера окна
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            drawBubbles(); // Перерисовываем пузырьки при изменении размера окна
+        });
+    </script>
+</body>
+</html>
