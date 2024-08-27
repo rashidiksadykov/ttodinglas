@@ -11,7 +11,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 // Настройка TikTok Live Connector
-let tiktokLiveConnection = new WebcastPushConnection('odinglas');
+let tiktokLiveConnection = new WebcastPushConnection('ferrone0302');
 
 let usersActivity = {}; // Объект для хранения активности пользователей
 let messageCount = 0;   // Счётчик сообщений
